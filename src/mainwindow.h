@@ -46,10 +46,12 @@ private slots:
     void on_actionNew_Game_triggered();
     void on_actionExit_triggered();
 
-
     void on_actionReset_Player_triggered();
 
+
     void on_actionAbout_triggered();
+
+
 
 private:
     Ui::MainWindow *ui;

@@ -1,6 +1,6 @@
 # Play Draughts
 
-Play Draughts is a Linux draughts game developed using C++ and [Qt5.15](https://doc.qt.io/qt-5/lgpl.html).
+Play Draughts is a Linux human vs computer draughts game developed using C++ and [Qt5.15](https://doc.qt.io/qt-5/lgpl.html).
 
 
 ![](playdraughts.png)
@@ -16,16 +16,18 @@ With Gtk distros such as Ubuntu you will have to install the Qt libraries.
 
 ## Using Play Draughts
 
-A basic classic computer vs human game.
+A  human vs computer draughts game.
 
 * The human player (white) goes first and moves up the board.
 * Left mouse click on a piece to select it and then second click on the square to move to.
 * If a capture is possible then move over the piece and click on the adjacent empty square.
-* If a multiple capture is possible then click on the player piece and then on the last square after the multiple capture square (use reset player if necessary -see below).
+* If a multiple capture is possible then make multiple moves.
 * The rules of draughts are that capturing is mandatory.
-* The computer makes a move once the player has finished
+* The computer makes a move once the player has finished.
 
-* Game information is updated in the status bar.
+* Game move information is updated in the status bar in the form (x1,y1)->(x2,y2).
+* The x coordinates run from left to right (0 to 7)
+* The y coordinates run from top to bottom (0 to 7)
 
 You can use
 
@@ -36,6 +38,8 @@ Tools -> Reset Player
 to reset the human player game mouse click if this becomes out of sequence e.g. when making follow-on captures.
 
 A piece which reaches the promotion line (the most distant row on the opponent's side) becomes a king and can move backwards and forwards.
+
+
 
 For more information on the Draughts game follow this [link](https://en.wikipedia.org/wiki/Draughts).
 

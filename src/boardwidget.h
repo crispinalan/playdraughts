@@ -52,9 +52,6 @@ const int BKING=4;
 typedef enum {WHITE =0, BLACK=1} COLOUR;
 
 
-const int WWINS=5;
-const int BWINS=6;
-
 
 struct Pos{
 public:
@@ -62,11 +59,10 @@ public:
 	int y;
 };
 
-struct Movement{
+struct Move{
 public:
 	Pos start;
-	std::vector<Pos> dests;
-	int numberOfCaptures;
+	Pos end;
 };
 
 
@@ -82,7 +78,7 @@ public:
 
     
 signals:
-    void outgoingText(const QString &text);
+    void outgoingText(const QString &text); //communication with mainwindow
     
 public slots:
     void mousePressEvent(QMouseEvent *event);
@@ -91,8 +87,6 @@ public slots:
 
 private:
 
-
-	//int position[8][8];
 	int theBoard[8][8];
 	int boardArray[64];
 
@@ -100,15 +94,13 @@ private:
 	void displayBoard(int board[8][8]);
 
 
-	//globals
+	//player clicks
 	bool firstClick =true;
 	int x1=0;
 	int y1=0;
 	int x2=0;
 	int y2=0;
 
-	//int turn; //current player
-	std::vector<Movement> moves; //global moves
 
 	int currentPiece=WMAN;
 	COLOUR currentPlayer =WHITE;
@@ -116,50 +108,44 @@ private:
 	bool playerFinished = false;
 
 
-	//movement
-	void printMovement(Movement m);
-	void addMove(Pos piece, std::vector<Pos> destinationsList, int captureCount);
-	bool findMakeWhiteMove(int board[8][8],int x1, int y1, int x2, int y2);
-	void makeMove(int board[8][8], Movement move);
 
-	std::vector<Movement> getPawnMoves(int board[8][8], COLOUR player, Pos pos1);
+	bool makeMove(int board[8][8], Move move, COLOUR side);
+	bool movesEqual(Move one, Move two);
+	void makeAIMove();
 
-	int getPawnCaptureMoves(Pos pos1, Pos pos2, int board[8][8], COLOUR player,int countCaptures, std::vector<Pos> destPositions);
-
-    std::vector<Movement> getKingMoves(int board[8][8], COLOUR player, Pos pos1);
-
-	int getKingCaptureMoves(Pos pos1, Pos pos2, int board[8][8], COLOUR player, int countCaptures, std::vector<Pos> destPositions);
-
-	std::vector<Movement> filterMovesOnCaptureCount(std::vector<Movement> moves);
-
-	int getBestCaptureCount(std::vector<Movement> moves);
-
-	std::vector<Movement> getAllMoves(int board[8][8], COLOUR player);
+	//helpers new
+	int numBMAN;
+    int numWMAN;
+    int numBKING;
+    int numWKING;
 
 
+	Pos getMidSquare(Move m);
+	bool isOpponentPiece(COLOUR player, const int piece);
+	bool isOwnPiece(int board[8][8], int x, int y, COLOUR player);
 
-	//helpers
-	bool isValidPos(Pos pos);
-	int isKing(int piece);
-	int isOpposite(COLOUR player, int piece);
-	COLOUR getOppositeColour(COLOUR player);
+	bool canJump(int board[8][8], int x, int y, COLOUR side);
+	bool isJump(int board[8][8], int x1, int y1, int x2, int y2);
 
-	int isEndOfBoard(Pos piece, COLOUR player);
-	Pos getNextDiag(Pos from, Pos to);
-	Pos getPrevDiag(Pos from, Pos to);
-	int getDiagDirection(Pos from, Pos to);
-	bool destinationsValid(std::vector<Pos> dests);
+	void getValidMoves(int board[8][8], int x, int y, vector<Move> &moves);
+	void getValidJumpMoves(int board[8][8], int x, int y, COLOUR side, vector<Move>& moves);
+	void getAllMoves(int board[8][8], COLOUR side, vector<Move>& moves);
+
+
+    void cloneBoard(int board1[8][8], int board2[8][8]);
+
+	int getScore(int board[8][8], COLOUR player);
+
+    int searchDepth; //search depth
+	Move minimaxStart(int board[8][8], COLOUR player, bool maximizing); //returns final move
+	int minimax(int board[8][8], COLOUR player, bool maximizing, int depth, int alpha, int beta); //returns score
 
 	bool checkForWin(int board[8][8], COLOUR player);
 	int numberWhitePiecesOnBoard(int board[8][8]);
 	int numberBlackPiecesOnBoard(int board[8][8]);
 
 
-	//AI (more to do)
-	void duplicateBoard(int board1[8][8], int board2[8][8]);
-	void  makeAIMove(int board[8][8], COLOUR player); //testing
-
-
+	// Drawing
 	QRect positionToRectangle(int position);
 	int squareSize;
 	int boardWidgetWidth;
@@ -171,7 +157,6 @@ private:
 	QPixmap whiteKing;
 	QPixmap blackPawn;
 	QPixmap blackKing;
-
 	QString gameInfo="";
 
 };

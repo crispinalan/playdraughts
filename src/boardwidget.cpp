@@ -70,6 +70,12 @@ void BoardWidget::newGame(){
 	aiColour=BLACK;
 	playerFinished = false;
 
+	numBMAN=12;
+    numWMAN=12;
+	numBKING=0;
+    numWKING=0;
+	searchDepth=8; //search depth
+
 }
 
 void BoardWidget::resetPlayer(){
@@ -89,6 +95,7 @@ void BoardWidget::resetPlayer(){
 	gameInfo.append(".  ");
 	emit outgoingText(gameInfo);
 }
+
 
 void BoardWidget::setupBoard(int board[8][8])
 {
@@ -128,7 +135,6 @@ void BoardWidget::setupBoard(int board[8][8])
 	board[7][6] = WMAN;
 
 }
-
 
 void BoardWidget::displayBoard(int board[8][8]) {
 
@@ -204,78 +210,101 @@ void BoardWidget::mousePressEvent(QMouseEvent *event)
 	x1=xpos;
 	y1=ypos;
 	firstClick=false;
-
-    QString x1Str =	QString::number(x1);
-    QString y1Str =	QString::number(y1);
-    gameInfo.clear();
-    gameInfo.append(" Player moving peice at:  (");
-    gameInfo.append(x1Str);
-    gameInfo.append(",");
-    gameInfo.append(y1Str);
-    gameInfo.append(") ");
-    emit outgoingText(gameInfo);
-
 	return;
 	}
+
 	else {
-	x2=xpos;
-	y2=ypos;
-	//currentPiece=getPiece(theBoard,x1,y1); //set gobally
+		x2=xpos;
+		y2=ypos;
 
-	if (findMakeWhiteMove(theBoard,x1,y1,x2,y2))
-	{
+		Move m_tmp {};
+		m_tmp.start.x=x1;
+		m_tmp.start.y=y1;
+		m_tmp.end.x=x2;
+		m_tmp.end.y=y2;
+
+		QString x1Str =	QString::number(x1);
+		QString y1Str =	QString::number(y1);
+		QString x2Str =	QString::number(x2);
+		QString y2Str =	QString::number(y2);
+
+
+		gameInfo.clear();
+		gameInfo.append(" Player move:  (");
+		gameInfo.append(x1Str);
+		gameInfo.append(",");
+		gameInfo.append(y1Str);
+		gameInfo.append(")  -> (");
+		gameInfo.append(x2Str);
+		gameInfo.append(",");
+		gameInfo.append(y2Str);
+		gameInfo.append(") ");
+
+		bool status =makeMove(theBoard, m_tmp, WHITE);
+
+
+		if(status ==false) //check move status
+		{
+			gameInfo.append(" Player move not possible: check for jumps");
+			firstClick=true;
+			playerFinished=false;
+			emit outgoingText(gameInfo);
+			return;
+		}
+
+
 		displayBoard(theBoard);
-		firstClick=true;
-		playerFinished=true;
 
+		//check for win
 		if(checkForWin(theBoard,WHITE)) {
 			//qDebug()<<"White Wins\n";
 			gameInfo.clear();
-		    gameInfo ="White wins. ";
-		    emit outgoingText(gameInfo);
+			gameInfo ="White wins. ";
+			emit outgoingText(gameInfo);
 			//messagebox win
 			QString text = "White wins.";
-            QMessageBox::information(this, "Draughts", text);
+			QMessageBox::information(this, "Draughts", text);
 			firstClick=true;
-			playerFinished=false;
+			currentPlayer=WHITE;
 			return;
 		}
-	}
-	else {
-		//qDebug()<<"Illegal move (wrong position or check for jumps)\n";
-		gameInfo ="Illegal move (wrong position or check for jumps)";
-		emit outgoingText(gameInfo);
-		firstClick=true;
-		playerFinished=false;
-		return;
-	}
 
-	if (playerFinished)
-	{
+		//check for another jump
 
-		//computer player
-		makeAIMove(theBoard,BLACK);
-		displayBoard(theBoard);
-		playerFinished=false;
-		//qDebug()<<"White to move\n";
-		gameInfo.clear();
-		gameInfo ="White to move. ";
-		emit outgoingText(gameInfo);
+		if( isJump(theBoard, m_tmp.start.x, m_tmp.start.y, m_tmp.end.x, m_tmp.end.y) )
+		{
+			if( canJump(theBoard, m_tmp.end.x, m_tmp.end.y, WHITE) )
+			{
+				gameInfo.append("Player can jump again");
+				firstClick=true;
+		        playerFinished=false;
+		        emit outgoingText(gameInfo);
+			}
+			else
+			{
+				//can't jump again so AI to play
+				gameInfo.append("AI player to move");
+				firstClick=true;
+		        playerFinished=true;
+		        emit outgoingText(gameInfo);
+				makeAIMove();
 
-		//check for win
-		if(checkForWin(theBoard,BLACK)) {
-		//qDebug()<<"black wins\n";
-		gameInfo.clear();
-		gameInfo ="Black wins. ";
-		emit outgoingText(gameInfo);
-		QString text = "Black wins.";
-		QMessageBox::information(this, "Draughts", text);
-		firstClick=true;
-		playerFinished=false;
-		return;
+			}
+		}
+		else
+		{
+			gameInfo.append("AI player to move");
+			firstClick=true;
+			playerFinished=true;
+			emit outgoingText(gameInfo);
+			makeAIMove();
 		}
 
-	} //playerfinished
+
+
+		firstClick=true;
+		playerFinished=true;
+		emit outgoingText(gameInfo);
 
 	} //else first click
 
@@ -283,76 +312,614 @@ void BoardWidget::mousePressEvent(QMouseEvent *event)
 }
 
 
+void BoardWidget::makeAIMove(){
+
+	Move mov = minimaxStart(theBoard, BLACK, true);
+
+	//qDebug() <<"minimax returned AI move  ..\n";
+	//qDebug()<<"("<<mov.start.x<<","<<mov.start.y<<") -> ("<<mov.end.x<<","<<mov.end.y<<") ";
+
+
+	QString x1Str =	QString::number(mov.start.x);
+	QString y1Str =	QString::number(mov.start.y);
+	QString x2Str =	QString::number(mov.end.x);
+	QString y2Str =	QString::number(mov.end.y);
+
+	gameInfo.clear();
+	gameInfo.append(" AI move:  (");
+	gameInfo.append(x1Str);
+	gameInfo.append(",");
+	gameInfo.append(y1Str);
+	gameInfo.append(")  -> (");
+	gameInfo.append(x2Str);
+	gameInfo.append(",");
+	gameInfo.append(y2Str);
+	gameInfo.append(") ");
+
+    bool status =makeMove(theBoard, mov, BLACK);
+	//qDebug()<<"AI move status = "<<status;
+
+	if(status ==false) {
+		qDebug()<<"makeAIMove failed status: "<<status;
+	}
+
+	displayBoard(theBoard);
+
+	//check for another jump
+
+	if( isJump(theBoard, mov.start.x, mov.start.y, mov.end.x, mov.end.y) )
+	{
+
+		if( canJump(theBoard, mov.end.x, mov.end.y, BLACK) )
+		{
+			gameInfo.append("AI can jump again");
+			//qDebug()<<"AI can jump again\n";
+			// recurse
+			makeAIMove();
+		}
+		else
+		{
+			//can't jump again so white to play
+			gameInfo.append("White player to move");
+		}
+	}
+	else
+	{
+		gameInfo.append("White player to move");
+	}
+
+	//check for win
+	if(checkForWin(theBoard, BLACK)) {
+		//qDebug()<<"White Wins\n";
+		gameInfo.clear();
+		gameInfo ="Black wins. ";
+		emit outgoingText(gameInfo);
+		//messagebox win
+		QString text = "Black wins.";
+		QMessageBox::information(this, "Draughts", text);
+		firstClick=true;
+		currentPlayer=WHITE;
+		return;
+	}
+
+	emit outgoingText(gameInfo);
+
+
+
+}
 
 //-------------------------------------------------------------------------------
 // Helpers
 //-------------------------------------------------------------------------------
 
-bool BoardWidget::isValidPos(Pos pos)
-{
-	//check if position is on the board
-    if(pos.x>=0 && pos.x<8 && pos.y >=0 && pos.y<8) return true;
-	else return false;
+
+Pos BoardWidget::getMidSquare(Move m) {
+    Pos middle = {(m.start.x + m.end.x) / 2, (m.start.y + m.end.y) / 2};
+    return middle;
 }
 
-int BoardWidget::isKing(int piece)
-{
-	bool king =false;
-    if  (piece==WKING || piece ==BKING) king =true;
-    return king;
-}
+bool BoardWidget::isOpponentPiece(COLOUR player, const int piece) {
 
-int BoardWidget::isOpposite(COLOUR player, int piece)
-{
-	if (player == WHITE && (piece == BMAN || piece == BKING)) return 1;
-	if (player == BLACK && (piece == WMAN || piece == WKING)) return 1;
-	return 0;
-}
+	bool result=false;
 
-COLOUR BoardWidget::getOppositeColour(COLOUR player)
-{
-	// Return the opposite colour to the argument
-   if(player == WHITE) return BLACK;
-	else return WHITE;
-}
-
-int BoardWidget::isEndOfBoard(Pos piece, COLOUR player)
-{
-	if (player == WHITE) return piece.y == BOARDSIZE - 1;
-	else return piece.y == 0;
-}
-
-
-Pos BoardWidget::getPrevDiag(Pos from, Pos to)
-{
-	Pos res;
-	if (from.x - to.x > 0) res.x = to.x + 1;
-	else res.x = to.x - 1;
-	if (from.y - to.y > 0) res.y = to.y + 1;
-	else res.y = to.y - 1;
-	return res;
-}
-Pos BoardWidget::getNextDiag(Pos from, Pos to)
-{
-	Pos res;
-	if (from.x - to.x > 0) res.x = to.x - 1;
-	else res.x = to.x + 1;
-	if (from.y - to.y > 0) res.y = to.y - 1;
-	else res.y = to.y + 1;
-	return res;
-}
-
-bool BoardWidget::destinationsValid(std::vector<Pos> dests)
-{
-	//check destinations are on board
-	for(unsigned int i=0; i<dests.size(); i++)
-	{
-		Pos p =dests.at(i);
-		if(!isValidPos(p)) return false;
+	if (player == BLACK) {
+		if (piece == WMAN || piece == WKING) result =true;
 	}
 
-	return true;
+	if (player == WHITE) {
+		if (piece == BMAN || piece == BKING) result =true;
+	}
+
+	return result;
 }
+
+bool BoardWidget::isOwnPiece(int board[8][8], int x, int y, COLOUR player) {
+
+	bool result =false;
+	const int  piece = board[x][y];
+
+	if (player == BLACK) {
+		if (piece == BMAN || piece == BKING) result =true;
+	}
+
+	if (player == WHITE) {
+		if (piece == WMAN || piece == WKING) result =true;
+	}
+
+	return result;
+}
+
+
+//-------------------------------------------------------------------------------
+// Jumps
+//-------------------------------------------------------------------------------
+
+void BoardWidget::getValidJumpMoves(int board[8][8], int x, int y, COLOUR side, vector<Move>& moves)
+{
+
+	//single jump moves
+
+	Pos start{x,y};
+	vector<Pos> capture_pos;
+
+	if (side == WHITE && board[x][y] == WMAN) {
+
+		capture_pos.push_back({x - 2, y - 2});
+        capture_pos.push_back({x + 2, y - 2});
+
+	}
+
+	else if (side == BLACK && board[x][y] == BMAN) {
+
+		capture_pos.push_back({x - 2, y + 2});
+        capture_pos.push_back({x + 2, y + 2});
+    }
+
+    else if (board[x][y] == BKING || board[x][y] == WKING) {
+        capture_pos.push_back({x + 2, y + 2});
+        capture_pos.push_back({x + 2, y - 2});
+        capture_pos.push_back({x - 2, y + 2});
+        capture_pos.push_back({x - 2, y - 2});
+    }
+
+	 int n = capture_pos.size();
+	 for (int i = 0; i < n; i++) {
+		 Pos temp = capture_pos[i];
+		 Move m = {start, temp};
+		 Pos mid = getMidSquare(m);
+
+		 if (temp.x>= 0 && temp.x < 8 && temp.y >= 0 && temp.y < 8
+
+			 && board[temp.x][temp.y] == EMPTY
+
+			 && isOpponentPiece(side, board[mid.x][mid.y]))
+			 {
+				 moves.push_back(m);
+
+			 }
+	 }
+
+}
+
+bool BoardWidget::isJump(int board[8][8], int x1, int y1, int x2, int y2)
+{
+
+	if (qAbs(x1 - x2) == 2 && qAbs(x1 - x2) == 2 ) //jump check
+    {
+		return true;
+	}
+
+	return false;
+}
+
+bool BoardWidget::canJump(int board[8][8], int x, int y, COLOUR side)
+{
+	bool jump =false;
+
+	Pos start{x,y};
+	vector<Pos> capture_pos;
+
+	if (side == WHITE && board[x][y] == WMAN) {
+
+		capture_pos.push_back({x - 2, y - 2});
+        capture_pos.push_back({x + 2, y - 2});
+
+	}
+
+	else if (side == BLACK && board[x][y] == BMAN) {
+
+		capture_pos.push_back({x - 2, y + 2});
+        capture_pos.push_back({x + 2, y + 2});
+    }
+
+    else if (board[x][y] == BKING || board[x][y] == WKING) {
+        capture_pos.push_back({x + 2, y + 2});
+        capture_pos.push_back({x + 2, y - 2});
+        capture_pos.push_back({x - 2, y + 2});
+        capture_pos.push_back({x - 2, y - 2});
+    }
+
+	 int n = capture_pos.size();
+	 for (int i = 0; i < n; i++) {
+		 Pos temp = capture_pos[i];
+		 Move m = {start, temp};
+		 Pos mid = getMidSquare(m);
+
+		 if (temp.x>= 0 && temp.x < 8 && temp.y >= 0 && temp.y < 8
+
+			 && board[temp.x][temp.y] == EMPTY
+
+			 && isOpponentPiece(side, board[mid.x][mid.y]))
+			 {
+				jump=true;
+
+			 }
+	 }
+
+	return jump;
+}
+
+//-------------------------------------------------------------------------------
+// Moves
+//-------------------------------------------------------------------------------
+
+void BoardWidget::getAllMoves(int board[8][8], COLOUR side, vector<Move>& moves) {
+
+
+	int pawn=EMPTY;
+	int king=EMPTY;
+
+	if(side == BLACK) {
+
+		pawn=BMAN;
+		king=BKING;
+	}
+
+	if(side == WHITE) {
+
+		pawn=WMAN;
+		king=WKING;
+	}
+
+	for (int x = 0; x < 8; x++) {
+        for (int y = 0; y < 8; y++) {
+            const int  piece = board[x][y];
+            if (piece == pawn|| piece == king) {
+                // genValidMoves(i, j, side, moves);
+                getValidJumpMoves(board, x, y, side, moves);
+            }
+        }
+    }
+    if (moves.empty()) {
+        for (int x = 0; x < 8; x++) {
+            for (int y = 0; y < 8; y++) {
+                const int  piece = board[x][y];
+                if (piece == pawn || piece == king) {
+                    // genValidMoves(i, j, side, moves);
+                    getValidMoves(board, x, y, moves);
+                }
+            }
+        }
+    }
+}
+
+
+bool BoardWidget::movesEqual(Move one, Move two) {
+
+	bool result=false;
+
+	if(one.start.x==two.start.x
+		&& one.start.y ==two.start.y
+		&& one.end.x ==two.end.x
+		&& one.end.y ==two.end.y) {
+
+		//qDebug()<<"moves equal\n";
+
+		result =true;
+	}
+
+   return result;
+}
+
+void BoardWidget::getValidMoves(int board[8][8], int x, int y, vector<Move> &moves) {
+
+	const int  piece = board[x][y];
+
+
+	if (piece == EMPTY) {
+        cout << "EMPTY PIECE\n";
+        return;
+    }
+
+    //man moves
+	if (piece == WMAN || piece == BMAN) {
+
+		//int xchange =0;
+		int ychange=0;
+
+		if (piece==WMAN) ychange = -1; //WMAN going up board
+		if (piece ==BMAN) ychange= +1; //BMAN going down board
+
+		int ynew = y+ychange;
+
+
+		if (ynew >= 0 && ynew < 8) {
+            int xnew = x + 1;
+            if (xnew < 8 && board[xnew][ynew] == EMPTY) {
+                moves.push_back({x, y, xnew, ynew});
+            }
+            xnew = x - 1;
+            if (xnew >= 0 && board[xnew][ynew] == EMPTY) {
+                moves.push_back({x, y, xnew, ynew});
+            }
+        }
+
+
+	//king move
+    } else {
+        int ynew = y + 1;
+        if (ynew < 8) {
+            int xnew = x + 1;
+            if (xnew < 8 && board[xnew][ynew] == EMPTY) {
+                moves.push_back({x, y, xnew, ynew});
+            }
+            xnew = x - 1;
+            if (xnew >= 0 && board[xnew][ynew] == EMPTY) {
+                moves.push_back({x, y, xnew, ynew});
+            }
+        }
+        ynew= y - 1;
+        if (ynew >= 0) {
+            int xnew = x + 1;
+            if (xnew < 8 && board[xnew][ynew] == EMPTY) {
+                moves.push_back({x, y, xnew, ynew});
+            }
+            xnew = x - 1;
+            if (xnew >= 0 && board[xnew][ynew] == EMPTY) {
+                moves.push_back({x, y, xnew, ynew});
+            }
+        }
+    }
+}
+
+//-------------------------------------------------------------------------------
+// Make move
+//-------------------------------------------------------------------------------
+
+bool BoardWidget::makeMove(int board[8][8], Move move, COLOUR side) {
+
+    Pos start = move.start;
+    int startx = start.x;
+    int starty = start.y;
+
+	Pos end = move.end;
+    int endx = end.x;
+    int endy = end.y;
+
+    const int current_piece = board[startx][starty];
+
+    if (!isOwnPiece(board, startx, starty, side) || board[startx][starty] == EMPTY) {
+        return false;
+    }
+
+    vector<Move> possible_moves;
+
+	getAllMoves(board, side, possible_moves);
+
+	bool found = false;
+
+    int n = possible_moves.size();
+
+	for (int i = 0; i < n && !found; i++) {
+
+        found = movesEqual(possible_moves[i], move);
+    }
+
+    if (found) {
+		//qDebug()<<"move found ";
+        //bool jump = false;
+
+		if (starty + 1 == endy || starty - 1 == endy) { //pawn move
+
+			//qDebug()<<"moving pawn ";
+
+			board[startx][starty] = EMPTY;
+            board[endx][endy] = current_piece;
+        }
+
+        else {
+            //jump = true;
+			//qDebug()<<"jump move ";
+
+			board[startx][starty] = EMPTY;
+
+			board[endx][endy] = current_piece;
+
+			Pos mid_sqr = getMidSquare(move);
+
+            const int midpiece =  board[mid_sqr.x][mid_sqr.y];
+
+
+            if (midpiece == BMAN) {
+                numBMAN--;
+            } else if (midpiece == WMAN) {
+                numWMAN--;
+            } else if (midpiece == BKING) {
+                numBMAN--;
+                numBKING--;
+            } else if (midpiece == WKING) {
+                numWMAN--;
+                numWKING--;
+            }
+
+            board[mid_sqr.x][mid_sqr.y] = EMPTY;
+        }
+
+
+        //check for kings
+        if (endy == 0 && side == WHITE) {
+            board[endx][endy] = WKING;
+            numWKING++;
+        }
+
+        else if (endy == 7 && side == BLACK) {
+            board[endx][endy] = BKING;
+            numBKING++;
+        }
+        return true;
+    }
+    else {
+        return false;
+    }
+}
+
+
+//--------------------------------------------------------------------------
+// AI Minimax
+//--------------------------------------------------------------------------
+
+int BoardWidget::getScore(int board[8][8], COLOUR player){
+
+	const int KINGWEIGHT=4;
+	const int PAWNWEIGHT=1;
+
+	int score =0;
+
+	if(player==BLACK) {
+
+		score =(KINGWEIGHT*numBKING + PAWNWEIGHT*numBMAN) -(KINGWEIGHT*numWKING + PAWNWEIGHT*numWMAN);
+		return score;
+	}
+
+	score =(KINGWEIGHT*numWKING + PAWNWEIGHT*numWMAN) -(KINGWEIGHT*numBKING + PAWNWEIGHT*numBMAN);
+
+	return score;
+
+}
+
+
+void BoardWidget::cloneBoard(int board1[8][8], int board2[8][8])
+{
+	for (int i = 0; i < 8; i++)
+		for (int j = 0; j < 8; j++)
+			board2[i][j] = board1[i][j];
+}
+
+
+Move BoardWidget::minimaxStart(int board[8][8], COLOUR player, bool maximizing)
+{
+	int alpha = -1000, beta = 1000;
+
+	vector<Move> possible_moves;
+
+	getAllMoves(board, player, possible_moves);
+
+	vector<int> scores;
+
+	if (possible_moves.empty()) {
+		qDebug()<<"No possible moves";
+		return {-1};
+	}
+
+	int tempBoard[8][8];
+	int num_moves = possible_moves.size();
+
+	for (int i = 0; i < num_moves; i++) {
+
+		cloneBoard(board,tempBoard);
+		makeMove(tempBoard, possible_moves[i], player);
+
+// 		bool status = makeMove(tempBoard, possible_moves[i], player);
+// 		if(status ==false) {
+// 			qDebug()<<"Minimax start: makeMove failed status: "<<status;
+// 		}
+
+
+		int score =minimax(tempBoard, player, !maximizing, searchDepth-1, alpha, beta);
+		scores.push_back(score);
+
+	}
+
+	int max_score=-1000;
+	int num_scores=scores.size();
+
+
+	for (int i = num_scores - 1; i >= 0; i--) {
+		if (scores[i] >= max_score) {
+			max_score = scores[i];
+		}
+	}
+
+	for (int i = 0; i < num_scores; i++) {
+
+		if (scores[i] < max_score) {
+			scores.erase(scores.begin() + i);
+			possible_moves.erase(possible_moves.begin() + i);
+			i--;
+			num_scores--;
+		}
+	}
+
+	num_moves = possible_moves.size();
+	Move final_move = possible_moves[rand() % num_moves];
+	return final_move;
+}
+
+
+//Side = COLOUR
+int BoardWidget::minimax(int board[8][8], COLOUR player, bool maximizing, int searchDepth, int alpha, int beta) {
+
+	if (searchDepth == 0) {
+		return getScore(board, player);
+	}
+
+	vector<Move> possible_moves;
+
+	getAllMoves(board, player, possible_moves);
+
+	int n = possible_moves.size();
+	int initial = 0;
+	//Board tempBoard;
+	int tempBoard[8][8];
+	if (maximizing) {
+		for (int i = 0; i < n; i++) {
+			cloneBoard(board,tempBoard);
+
+			makeMove(tempBoard, possible_moves[i], player);
+
+// 			bool status = makeMove(tempBoard, possible_moves[i], player);
+// 			if(status ==false) {
+// 			qDebug()<<"Minimax maximising: makeMove failed status: "<<status;
+// 			}
+
+
+			//switch player
+			if (player == BLACK) player=WHITE;
+			else if(player==WHITE) player=BLACK;
+
+			int result = minimax(tempBoard, player, !maximizing, searchDepth-1, alpha, beta);
+			initial = max(result, initial);
+			alpha = max(initial, alpha);
+
+			if (alpha >= beta) {
+				break;
+			}
+		}
+	} else {
+		initial = 1000;
+		for (int i = 0; i < n; i++) {
+
+			cloneBoard(board,tempBoard);
+
+			makeMove(tempBoard, possible_moves[i], player);
+
+// 			bool status = makeMove(tempBoard, possible_moves[i], player);
+// 			if(status ==false) {
+// 			qDebug()<<"Minimax minimising: makeMove failed status: "<<status;
+// 			}
+
+			//switch player
+			if (player == BLACK) player=WHITE;
+			else if(player==WHITE) player=BLACK;
+
+			int result = minimax(tempBoard, player, !maximizing, searchDepth - 1, alpha, beta);
+
+			initial = min(result, initial);
+			beta = min(beta, initial);
+
+			if (alpha >= beta) {
+				break;
+			}
+		}
+	}
+	return initial;
+}
+
+
+
+//--------------------------------------------------------------------------
+// Check for win
+//--------------------------------------------------------------------------
 
 
 bool BoardWidget::checkForWin(int board[8][8], COLOUR player)
@@ -365,8 +932,7 @@ bool BoardWidget::checkForWin(int board[8][8], COLOUR player)
 	if(player ==WHITE) {
 		//check for white win
     int blackNumber=numberBlackPiecesOnBoard(board);
-    if(blackNumber==0) return true;
-	}
+    if(blackNumber==0) return true;	}
 
 	return false;
 }
@@ -398,522 +964,6 @@ int BoardWidget::numberBlackPiecesOnBoard(int board[8][8])
 	}
 	return numberBlackPieces;
 }
-//------------------------------------------------------------------------------------
-// Movements
-//-------------------------------------------------------------------------------------
 
-void BoardWidget::printMovement(Movement m){
 
-	//used for debugging
-	//qDebug()<<"movement \n";
-
-	Pos spos =m.start;
-	std::vector<Pos> dests = m.dests;
-	int numberOfCaptures = m.numberOfCaptures;
-
-	qDebug()<<"start (x,y) ("<<spos.x<<","<<spos.y<<") ";
-	qDebug()<<"destinations: ";
-	for (long unsigned int i = 0; i < dests.size(); i++) {
-	Pos p =dests.at(i);
-	qDebug()<<" ("<<p.x<<","<<p.y<<") ";
-	}
-	//qDebug()<<"\n";
-	qDebug()<<"numberOfCaptures = "<<numberOfCaptures<<"\n";
-
-}
-
-void BoardWidget::addMove(Pos piece, std::vector<Pos> destinationsList, int captureCount)
-{
-	Movement m_tmp {};
-	m_tmp.start=piece;
-	m_tmp.dests=destinationsList;
-	m_tmp.numberOfCaptures=captureCount;
-
-	if (destinationsValid(destinationsList))
-	moves.push_back(m_tmp);
-}
-
-void BoardWidget::duplicateBoard(int board1[8][8], int board2[8][8])
-{
-	for (int i = 0; i < 8; i++)
-		for (int j = 0; j < 8; j++)
-			board2[i][j] = board1[i][j];
-}
-
-bool BoardWidget::findMakeWhiteMove(int board[8][8],int x1, int y1, int x2, int y2)
-{
-	//Get black moves for board
-	int copyBoard[BOARDSIZE][BOARDSIZE];
-	duplicateBoard(board,copyBoard);
-
-	std::vector<Movement> whiteMoves = getAllMoves(board,WHITE);
-
-	//qDebug()<<"findMakeWhiteMove: whitemoves size = "<<whiteMoves.size()<<"\n";
-
-	if(whiteMoves.empty()) return false;
-
-	duplicateBoard(copyBoard,board);
-
-	for(unsigned int i=0; i<whiteMoves.size(); i++)
-	{
-		Movement m =whiteMoves.at(i);
-
-		if (m.start.x ==x1 && m.start.y == y1)
-		{
-			if(m.dests.at(m.dests.size()-1).x ==x2 &&
-				m.dests.at(m.dests.size()-1).y ==y2)	{
-					//found move
-					//duplicateBoard(copyBoard,board);
-					makeMove(board,m);
-					return true;
-				}
-
-		}
-	}
-	duplicateBoard(copyBoard,board);
-	return false;
-}
-
-void BoardWidget::makeMove(int board[8][8], Movement move)
-{
-
-	Pos cur;
-	Pos cap;  //capture
-
-	cur.x=move.start.x;
-	cur.y=move.start.y;
-
-	//qDebug()<<"makeMove: start ("<<cur.x<<","<<cur.y<<") piece_type = "<<board[cur.x][cur.y]<<"\n";
-
-	if(move.dests.empty()) return;
-
-	for(unsigned int i =0; i<move.dests.size(); i++)
-	{
-
-		board[move.dests[i].x][move.dests[i].y] = board[cur.x][cur.y];
-
-// 		//check for kings
-		if((move.dests[i].y == 0) && (board[cur.x][cur.y] == WMAN)) {
- 			board[move.dests[i].x][move.dests[i].y] = WKING;
- 		    currentPiece=WKING;
- 		}
-
- 		if((move.dests[i].y == BOARDSIZE - 1) && (board[cur.x][cur.y] == BMAN)) {
- 			board[move.dests[i].x][move.dests[i].y] = BKING;
- 			currentPiece=BKING;
- 		}
-
-
-		board[cur.x][cur.y] = EMPTY;
-
-		if (move.numberOfCaptures > 0){
-			 cap = getPrevDiag(cur, move.dests[i]);
-			 //cout<<"Capture pos = ("<<cap.x<<","<<cap.y<<")"<<endl;
-			 board[cap.x][cap.y] = EMPTY;
-		}
-
-	cur.x = move.dests[i].x;
-	cur.y = move.dests[i].y;
-
-	}
-}
-
-
-std::vector<Movement> BoardWidget::getAllMoves(int board[8][8], COLOUR player)
-{
-
-
-	Pos p;
-	vector<Movement> allMoves{};
-	vector<Movement> legalMoves{};
-	char currPiece;
-
-	for (int x = 0; x < 8; x++)
-		for (int y = 0; y < 8; y++)
-			if (!isOpposite(player, board[x][y]) && board[x][y] != EMPTY){
-		p.y = y;
-		p.x = x;
-		currPiece = board[x][y];
-
-		//qDebug()<<"getAllMoves(): testing currPiece ("<<x<<","<<y<<") = "<<currPiece<<"\n";
-		if (isKing(currPiece)){
-			if(player==WHITE) currentPiece=WKING; //globals
-			if(player==BLACK) currentPiece=BKING;
-			vector<Movement> king_moves =getKingMoves(board, player, p);
-            allMoves.insert(allMoves.end(), king_moves.begin(),king_moves.end());
-			}
-		else {
-			if(player==WHITE) currentPiece=WMAN; //globals
-			if(player==BLACK) currentPiece=BMAN;
-			vector<Movement> pawn_moves = getPawnMoves(board, player, p);
-
-			//qDebug()<<"getAllMoves(): pawnMoves Size = "<<pawn_moves.size()<<"\n";
-
-			//print out pawn_moves
-
-// 			for (long unsigned int i=0; i < pawn_moves.size(); i++) {
-// 				Movement m =pawn_moves.at(i);
-// 				printMovement(m);
-// 			}
-
-
-			allMoves.insert(allMoves.end(), pawn_moves.begin(),pawn_moves.end());
-			}
-		}
-
-	int count = getBestCaptureCount(allMoves);
-	//qDebug()<<"getAllMoves(): bestCaptureCount = "<<count<<"\n";
-
-	if (count == 0) return allMoves; //don't change allmoves as no capture
-	else {
-	for(unsigned int i=0; i<allMoves.size(); i++)
-	{
-		Movement m =allMoves.at(i);
-		int captures = m.numberOfCaptures;
-		if(captures >0)
-		{
-			legalMoves.push_back(m);
-		}
-	}
-	}
-	return legalMoves;
-}
-
-
-//------------------------------------------------------------------------------------
-// Pawn moves
-//-------------------------------------------------------------------------------------
-
-std::vector<Movement> BoardWidget::getPawnMoves(int board[8][8], COLOUR player, Pos pos1)
-{
-	//Pass board by value as it should be copied for each call so that the
-	//previous state is retained in the call function
-	vector<Movement> filteredMoves{};
-	vector<Pos> destPositions{}; //destination positions for jump moves
-
-	moves.clear(); //clear global moves vector
-
-	//pos array of the 4 possible diagonals
-	Pos pos[4] = {  { pos1.x - 1, pos1.y - 1 },
-					{ pos1.x + 1, pos1.y - 1 },
-					{ pos1.x - 1, pos1.y + 1 },
-					{ pos1.x + 1, pos1.y + 1 } };
-
-	int direction = 1;
-	int foundFront = -1;
-
-
-	//if (player == BLACK) direction = -1;
-
-	if (player == BLACK) direction = 1;
-	if (player == WHITE) direction = -1;
-
-	for (int i = 0; i < 4; i++){
-
-		if ((isValidPos(pos[i])) &&
-				(pos[i].y == pos1.y + direction) &&
-				(board[pos[i].x][pos[i].y] == EMPTY) )
-		{
-			//---------------------------------------
-			//normal single move
-			//----------------------------------------
-			destPositions.clear();	//clear
-			destPositions.push_back(pos[i]); //push current move
-			addMove(pos1,destPositions,0);
-			//return moves;
-			destPositions.clear();
-
-		}
-
-		else if ((isValidPos(pos[i])) &&
-				(pos[i].y == pos1.y + direction) &&
-				(isOpposite(player, board[pos[i].x][pos[i].y])))
-		{
-			//-------------------------------------
-			//now in single jump terrirory
-			//-------------------------------------
-
-
-			char tmp = board[pos[i].x][pos[i].y];	//opposite colour
-			board[pos[i].x][pos[i].y] = EMPTY;
-			board[pos1.x][pos1.y] = EMPTY;
-			Pos pos2 = getNextDiag(pos1, pos[i]);
-			//pos2 = getNextDiag(pos1, pos[i]);
-
-
-			destPositions.push_back(pos2);
-
-			//&&(pos[i].y == pos2.y + direction)
-
-			if (isValidPos(pos2)  && board[pos2.x][pos2.y] == EMPTY)
-			{
-
-				//-----------------------------------------------------
-				//now in multiple jumps terriory (recursion)
-				//-----------------------------------------------------
-
-				//dest_positions.push_back(pos2);
-
-				if (!isEndOfBoard(pos2, player)) {
-
-					//recursively adds capture moves to moves
-					foundFront = getPawnCaptureMoves(pos1, pos2,
-													board, player, 1, destPositions);
-				}
-			   if (foundFront == 0 || isEndOfBoard(pos2, player))
-				{
-					addMove(pos1,destPositions,1);
-				}
-
-			}
-			board[pos[i].x][pos[i].y] = tmp;
-			board[pos1.x][pos1.y] = currentPiece; //put piece back on board e.g.curr_piece= BLACK_M
-			destPositions.clear();
-		}
-	}
-	return filteredMoves=filterMovesOnCaptureCount(moves);
-}
-
-int BoardWidget::getPawnCaptureMoves(Pos pos1, Pos pos2, int board[8][8], COLOUR player,
-										int countCaptures, std::vector<Pos> destPositions)
-{
-	//Pass the current board to recursive function by value.
-	//It should be copied for each call so that the previous state is retained
-	//in the call function (captures).
-
-	Pos pos[4] = { 	{ pos2.x - 1, pos2.y - 1 },
-					{ pos2.x + 1, pos2.y - 1 },
-					{ pos2.x - 1, pos2.y + 1 },
-					{ pos2.x + 1, pos2.y + 1 } };
-	int direction = 1;
-	int foundNow = 0;
-	char tmp =board[pos1.x][pos1.y];
-	int foundFront = -1;
-	//if (player == BLACK) direction = -1;
-	if (player == BLACK) direction = 1;
-	if (player == WHITE) direction = -1;
-
-	for (int i = 0; i < 4; i++)
-
-		//add direction checking
-		//&&(pos[i].y == pos2.y + direction)
-		if (isValidPos(pos[i])
-		&&(pos[i].y == pos2.y + direction)
-		&& isOpposite(player, board[pos[i].x][pos[i].y])){
-
-			Pos newPiece = getNextDiag(pos2, pos[i]);
-
-		if (isValidPos(newPiece) && board[newPiece.x][newPiece.y] == EMPTY){
-
-			foundNow++;
-
-			tmp = board[pos[i].x][pos[i].y]; //copy board piece to tmp
-			board[pos[i].x][pos[i].y] = EMPTY; //now make pos position empty
-			//vector<Pos> newDests(destPositions.begin(), destPositions.end());
-			vector<Pos> newDests;
-			newDests.insert(newDests.end(),destPositions.begin(), destPositions.end());
-			newDests.push_back(newPiece);
-
-			//if (!(isEndOfBoard(newPiece, player) && !isKing(currentPiece)))
-			if (!(isEndOfBoard(newPiece, player)) && !isKing(currentPiece))
-
-				foundFront = getPawnCaptureMoves(pos1, newPiece, board, player, countCaptures + 1, newDests);
-
-			if (foundFront == 0 || (isEndOfBoard(newPiece, player) && !isKing(currentPiece))) {
-				addMove(pos1,newDests,countCaptures+1);
-				newDests.clear();
-
-			}
-			newDests.clear();
-			board[pos[i].x][pos[i].y] = tmp;
-		}
-	}
-	return foundNow;
-}
-
-//----------------------------------------------------------------------------------------
-// filter moves on capture count
-//-----------------------------------------------------------------------------------------
-
-std::vector<Movement> BoardWidget::filterMovesOnCaptureCount(std::vector<Movement> moves)
-{
-	//filter moves for valid moves only
-	vector<Movement> filteredMoves {};
-	//filteredMoves.insert(filteredMoves.end(), moves.begin(), moves.end());
-
-	int bestCaptureCount = getBestCaptureCount(moves);
-
-	if (bestCaptureCount>0)
-	{
-		//only add moves with capture count >zero
-
-	for(unsigned int i=0; i<moves.size(); i++)
-	{
-		Movement m =moves.at(i);
-		int captures = m.numberOfCaptures;
-		if(captures>0) filteredMoves.push_back(m);
-	}
-	return filteredMoves;
-	}
-
-	return moves; //else just return original moves
-}
-
-int BoardWidget::getBestCaptureCount(std::vector<Movement> moves)
-{
-	//Each position can have a set of moves
-	// stored in a vector<Movement> list
-
-	int bestCaptureCount=0;
-
-	for(unsigned int i=0; i< moves.size(); i++)
-	{
-		Movement m =moves.at(i);
-		int captures = m.numberOfCaptures;
-		if(captures>bestCaptureCount)
-		{
-			bestCaptureCount=captures;
-		}
-	}
-	return bestCaptureCount;
-}
-
-
-//----------------------------------------------------------------------------------------
-// king moves
-//-----------------------------------------------------------------------------------------
-
-std::vector<Movement> BoardWidget::getKingMoves(int board[8][8], COLOUR player, Pos pos1)
-{
-	vector<Pos> destPositions{}; //destination positions for jump moves
-	vector<Movement> filteredMoves {};
-	moves.clear(); //clear global moves vector
-
-
-	//pos array of the 4 possible diagonals
-	Pos pos[4] = {  { pos1.x - 1, pos1.y - 1 },
-					{ pos1.x + 1, pos1.y - 1 },
-					{ pos1.x - 1, pos1.y + 1 },
-					{ pos1.x + 1, pos1.y + 1 } };
-
-	Pos curr, newPiece;
-	int foundFront = -1;
-
-
-	for (int i = 0; i < 4; i++){
-		curr=pos[i];
-		if ((isValidPos(curr)) &&
-				(board[curr.x][curr.y] == EMPTY) )
-		{
-			//---------------------------------------
-			//normal single move
-			//----------------------------------------
-			destPositions.clear();	//clear
-			destPositions.push_back(curr); //push current move
-			addMove(pos1,destPositions,0);
-
-
-		}
-
-		else if ((isValidPos(curr)) &&
-				(isOpposite(player, board[curr.x][curr.y])))
-		{
-			//-------------------------------------
-			//now in jumping terrirory
-			//-------------------------------------
-
-			char tmp = board[curr.x][curr.y];	//opposite colour
-			board[curr.x][curr.y] = EMPTY;
-			board[pos1.x][pos1.y] = EMPTY;
-			//Pos pos2 = getNextDiag(pos1, pos[i]);
-			newPiece=getNextDiag(pos1,curr);
-			destPositions.push_back(newPiece);
-
-			if (isValidPos(newPiece) && board[newPiece.x][newPiece.y] == EMPTY)
-			{
-
-				foundFront = getKingCaptureMoves(pos1, newPiece,board, player, 1, destPositions);
-
-			   if (foundFront == 0)
-				{
-
-					addMove(pos1,destPositions,1);
-				}
-
-			}
-
-			destPositions.clear();
-			board[pos[i].x][pos[i].y] = tmp;
-		}
-
-	}
-		return filteredMoves=filterMovesOnCaptureCount(moves);
-}
-
-
-int BoardWidget::getKingCaptureMoves(Pos pos1, Pos pos2, int board[8][8], COLOUR player, int countCaptures, std::vector<Pos> destPositions)
-{
-
-	Pos pos[4] = { 	{ pos2.x - 1, pos2.y - 1 },
-					{ pos2.x + 1, pos2.y - 1 },
-					{ pos2.x - 1, pos2.y + 1 },
-					{ pos2.x + 1, pos2.y + 1 } };
-
-	int foundNow = 0;
-	char tmp =board[pos1.x][pos1.y];
-	int foundFront = -1;
-
-	for (int i = 0; i < 4; i++)
-
-		if (isValidPos(pos[i]) && isOpposite(player, board[pos[i].x][pos[i].y])){
-
-			Pos newPiece = getNextDiag(pos2, pos[i]);
-
-		if (isValidPos(newPiece) && board[newPiece.x][newPiece.y] == EMPTY){
-
-			foundNow++;
-
-			tmp = board[pos[i].x][pos[i].y]; //copy board piece to tmp
-			board[pos[i].x][pos[i].y] = EMPTY; //now make pos position empty
-
-			vector<Pos> newDests(destPositions.begin(), destPositions.end());
-			newDests.push_back(newPiece);
-
-
-			if (!(isEndOfBoard(newPiece, player)))
-
-				foundFront = getKingCaptureMoves(pos1, newPiece, board, player, countCaptures + 1, newDests);
-
-			if (foundFront == 0) {
-				addMove(pos1,newDests,countCaptures+1);
-			}
-
-			newDests.clear();
-			board[pos[i].x][pos[i].y] = tmp;
-		}
-	}
-
-	return foundNow;
-}
-
-
-
-//----------------------------------------------------------------------------------------
-// AI (to do)
-//-----------------------------------------------------------------------------------------
-
-
-void  BoardWidget::makeAIMove(int board[8][8], COLOUR player) {
-
-	vector<Movement> moveList = getAllMoves(board, player); //filtered on capture count
-	Movement best_movement;
-
-	if(!moveList.empty())
-	{
-		best_movement=moveList.at(0);
-	}
-
-	makeMove(board,best_movement);
-
-}
 

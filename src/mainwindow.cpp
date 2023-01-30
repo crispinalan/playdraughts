@@ -62,14 +62,11 @@ void MainWindow::on_actionNew_Game_triggered(){
   this->ui->widget->newGame();
 }
 
-
-
-void MainWindow::on_actionReset_Player_triggered() {
+void MainWindow::on_actionReset_Player_triggered(){
 
   this->ui->widget->resetPlayer();
 
 }
-
 
 
 void MainWindow::on_actionAbout_triggered()
