@@ -24,6 +24,7 @@ A  human vs computer draughts game.
 * If a multiple capture is possible then make multiple moves.
 * The rules of draughts are that capturing is mandatory.
 * The computer makes a move once the player has finished.
+* Minimax AI is used for the game play.
 
 * Game move information is updated in the status bar in the form (x1,y1)->(x2,y2).
 * The x coordinates run from left to right (0 to 7)
